@@ -12,6 +12,10 @@ import (
 	"syscall"
 )
 
+type config struct {
+
+}
+
 func DumpStacks() {
 	buf := make([]byte, 1<<16)
 	stackLen := runtime.Stack(buf, true)
@@ -19,6 +23,7 @@ func DumpStacks() {
 	helper.Logger.Error(buf[:stackLen])
 	helper.Logger.Error("*** dump end")
 }
+
 func main() {
 
 	helper.SetupConfig()
@@ -40,8 +45,7 @@ func main() {
 	// ignore signal handlers set by Iris
 	signal.Ignore()
 	signalQueue := make(chan os.Signal)
-	signal.Notify(signalQueue, syscall.SIGINT, syscall.SIGTERM,
-		syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGUSR1)
+	signal.Notify(signalQueue, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGUSR1)
 	for {
 		s := <-signalQueue
 		switch s {

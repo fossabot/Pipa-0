@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"pipa/helper"
+	"pipa/imagick"
 	"pipa/redis"
 	"regexp"
 	"strconv"
@@ -29,16 +30,6 @@ type FinishTask struct {
 
 var UNKNOWN string = "unknown"
 
-func returnError(code int, uuid string, url string, Q chan FinishTask) {
-	Q <- FinishTask{code, uuid, url, nil, ""}
-}
-
-func returnUnchange(code int, uuid string, url string, filePath string, Q chan FinishTask) {
-	buffer, _ := bimg.Read(filePath)
-	img := bimg.NewImage(buffer)
-	Q <- FinishTask{code, uuid, url, buffer, img.Type()}
-}
-
 func StartWork() {
 	taskQ := make(chan string, 10)
 	returnQ := make(chan FinishTask)
@@ -53,7 +44,6 @@ func StartWork() {
 	//will use signal channel to quit
 	for {
 		r, err := redis.Strings()
-		helper.Logger.Println("####r= ", r)
 		if err != nil {
 			helper.Logger.Info("something bad happend %v", err)
 			return
@@ -66,13 +56,18 @@ func StartWork() {
 func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slave_num int) {
 
 	for {
+		pipa := PipaProcess{
+			ImagePrecess: imagick.Initialize(),
+			ResultQ:      resultQ,
+		}
+		defer pipa.processDone()
 		task := <-taskQ
 		//split url
 		var data TaskData
 		dec := json.NewDecoder(strings.NewReader(task))
 		if err := dec.Decode(&data); err != nil {
 			helper.Logger.Println("Decode failed")
-			returnError(400, UNKNOWN, "", resultQ)
+			pipa.returnError(400, UNKNOWN, "")
 			continue
 		}
 		uuid := data.Uuid
@@ -95,7 +90,7 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 			pType = 2
 		} else {
 			helper.Logger.Info("can not found convert parameters")
-			returnError(400, uuid, url, resultQ)
+			pipa.returnError(400, uuid, url)
 			continue
 		}
 
@@ -108,20 +103,22 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 			}
 		}
 
+		var retCode int
 		downloadUrl := "http://" + url[startPos:pos]
 		convertParams := url[pos+len("?x-oss-process=image/"):]
 		convertParamsSlice := strings.Split(convertParams, "/")
 
-		originFileName, retCode := download(client, downloadUrl, uuid)
+		//originFileName, retCode := download(client, downloadUrl, uuid)
+		pipa.OriginFileName, retCode = download(client, downloadUrl, uuid)
 		if retCode != 200 {
-			returnError(retCode, uuid, url, resultQ)
-			os.Remove(originFileName)
+			pipa.returnError(retCode, uuid, url)
+			os.Remove(pipa.OriginFileName)
 			continue
 		}
 
 		if pType == 1 || pType == 2 {
-			returnUnchange(200, uuid, url, originFileName, resultQ)
-			os.Remove(originFileName)
+			pipa.returnUnchange(200, uuid, url)
+			os.Remove(pipa.OriginFileName)
 			continue
 		}
 
@@ -148,7 +145,10 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 				}
 			}
 
-
+			err := pipa.processImage(taskType, captures, uuid, url)
+			if err != nil {
+				continue
+			}
 		}
 	}
 
