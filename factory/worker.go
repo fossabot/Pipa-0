@@ -15,9 +15,18 @@ import (
 	"time"
 )
 
-type TaskData struct {
+type StartTask struct {
 	Uuid string `json:"uuid"`
 	Url  string `json:"url"`
+}
+
+type TaskData struct {
+	taskType     string
+	uuid         string
+	url          string
+	buckerDomain string
+	captures     map[string]string
+	client       *http.Client
 }
 
 type FinishTask struct {
@@ -63,61 +72,32 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 		defer pipa.processDone()
 		task := <-taskQ
 		//split url
-		var data TaskData
+		var startData StartTask
+		taskData := TaskData{"", UNKNOWN, "", "", make(map[string]string), nil}
 		dec := json.NewDecoder(strings.NewReader(task))
-		if err := dec.Decode(&data); err != nil {
+		if err := dec.Decode(&startData); err != nil {
 			helper.Logger.Println("Decode failed")
-			pipa.returnError(400, UNKNOWN, "")
-			continue
-		}
-		uuid := data.Uuid
-		url := data.Url
-		helper.Logger.Info("I got task %s %s\n", uuid, url)
-
-		//download content from data stripe all the query string and add "http://"
-		taskType := ""
-		var pos int
-		var pType int
-
-		if pos0 := strings.Index(url, "?x-oss-process=image/"); pos0 != -1 {
-			pos = pos0
-			pType = 0
-		} else if pos1 := strings.Index(url, "?x-oss-process=style/"); pos1 != -1 {
-			pos = pos1
-			pType = 1
-		} else if pos2 := strings.Index(url, "?"); pos2 != -1 {
-			pos = pos2
-			pType = 2
-		} else {
-			helper.Logger.Info("can not found convert parameters")
-			pipa.returnError(400, uuid, url)
+			pipa.returnError(400, taskData)
 			continue
 		}
 
-		//if remove any slash at the start
-		var startPos int
-		var v rune
-		for startPos, v = range url[0:pos] {
-			if string(v) != "/" {
-				break
-			}
+		pType, domain, downloadUrl, convertParams, err := parseUrl(startData)
+		if err != nil {
+			continue
 		}
 
+		taskData.buckerDomain = domain
 		var retCode int
-		downloadUrl := "http://" + url[startPos:pos]
-		convertParams := url[pos+len("?x-oss-process=image/"):]
 		convertParamsSlice := strings.Split(convertParams, "/")
 
-		//originFileName, retCode := download(client, downloadUrl, uuid)
-		pipa.OriginFileName, retCode = download(client, downloadUrl, uuid)
+		pipa.OriginFileName, retCode = download(client, downloadUrl, startData.Uuid, "")
 		if retCode != 200 {
-			pipa.returnError(retCode, uuid, url)
+			pipa.returnError(retCode, taskData)
 			os.Remove(pipa.OriginFileName)
 			continue
 		}
-
 		if pType == 1 || pType == 2 {
-			pipa.returnUnchange(200, uuid, url)
+			pipa.returnUnchange(200, taskData)
 			os.Remove(pipa.OriginFileName)
 			continue
 		}
@@ -126,12 +106,11 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 			var r []string
 			var names []string
 
-			r, names, taskType = selectOperation(task, convertParams)
-			if taskType == "" {
+			r, names, taskData.taskType = selectOperation(task, convertParams)
+			if taskData.taskType == "" {
 				continue
 			}
 
-			captures := make(map[string]string)
 			for i, name := range names {
 				if i == 0 {
 					continue
@@ -139,22 +118,25 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 				helper.Logger.Info("name: %s, %s", name, r[i])
 				splited := strings.Split(r[i], "_")
 				if len(splited) < 2 {
-					captures[name] = ""
+					taskData.captures[name] = ""
 				} else {
-					captures[name] = splited[1]
+					taskData.captures[name] = splited[1]
 				}
 			}
 
-			err := pipa.processImage(taskType, captures, uuid, url)
+			err := pipa.processImage(taskData)
 			if err != nil {
+				pipa.returnUnchange(200, taskData)
+				os.Remove(pipa.OriginFileName)
+				helper.Logger.Error("Image process error: ",err)
 				continue
 			}
+			os.Remove(pipa.OriginFileName)
 		}
 	}
-
 }
 
-func download(client *http.Client, downloadUrl string, uuid string) (string, int) {
+func download(client *http.Client, downloadUrl, uuid, localDir string) (string, int) {
 	helper.Logger.Info("Start to download %s\n", downloadUrl)
 	resp, err := client.Get(downloadUrl)
 	if err != nil {
@@ -185,7 +167,7 @@ func download(client *http.Client, downloadUrl string, uuid string) (string, int
 	}
 
 	/* open temp file */
-	tmpfile, err := ioutil.TempFile("", uuid)
+	tmpfile, err := ioutil.TempFile(localDir, uuid)
 	if err != nil {
 		helper.Logger.Info("can not create temp file %s", uuid)
 		return "", 404

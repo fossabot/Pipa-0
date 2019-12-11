@@ -1,23 +1,11 @@
 package imagick
 
 import (
-	"gopkg.in/gographics/imagick.v3/imagick"
 	"math"
 	"pipa/helper"
 )
 
-const (
-	//zoom factory，default 0.0
-	Zoom       = 0.0
-	Force      = false
-	Crop       = false
-	Pad        = false
-	Limit      = true
-	Background = "rgb(255,255,255)"
-	Method     = imagick.FILTER_POINT
-)
-
-type Options struct {
+type Resize struct {
 	Width      int
 	Height     int
 	Zoom       float64
@@ -28,7 +16,7 @@ type Options struct {
 	Background string
 }
 
-func (img *ImageWand) resize(o Options) (err error) {
+func (img *ImageWand) resize(o Resize) (err error) {
 	originWidth := int(img.MagickWand.GetImageWidth())
 	originHeight := int(img.MagickWand.GetImageHeight())
 
@@ -82,11 +70,11 @@ func (img *ImageWand) resize(o Options) (err error) {
 	return nil
 }
 
-func newOptions() Options {
-	return Options{0, 0, Zoom, Force, Crop, Pad, Limit, Background}
+func newResize() Resize {
+	return Resize{0, 0, Zoom, Force, Crop, Pad, Limit, Background}
 }
 
-func imageCalculations(o *Options, inWidth, inHeight int) float64 {
+func imageCalculations(o *Resize, inWidth, inHeight int) float64 {
 	factor := 1.0
 	hFactor := float64(o.Width) / float64(inWidth)
 	wFactor := float64(o.Height) / float64(inHeight)
@@ -112,7 +100,7 @@ func imageCalculations(o *Options, inWidth, inHeight int) float64 {
 	return factor
 }
 
-func (img *ImageWand) cropImage(o Options, originWidth, originHeight int) error {
+func (img *ImageWand) cropImage(o Resize, originWidth, originHeight int) error {
 	offsetWidth := math.Abs(float64(originWidth-o.Width) / 2)
 	offsetHeight := math.Abs(float64(originHeight-o.Height) / 2)
 	err := img.MagickWand.CropImage(uint(o.Width), uint(o.Height), int(offsetWidth), int(offsetHeight))
@@ -123,7 +111,7 @@ func (img *ImageWand) cropImage(o Options, originWidth, originHeight int) error 
 	return nil
 }
 
-func (img *ImageWand) extentImage(o Options, originWidth, originHeight int) error {
+func (img *ImageWand) extentImage(o Resize, originWidth, originHeight int) error {
 	img.PixelWand.SetColor(o.Background)
 	err := img.MagickWand.SetImageBackgroundColor(img.PixelWand)
 	if err != nil {

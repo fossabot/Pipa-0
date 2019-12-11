@@ -1,12 +1,55 @@
 package imagick
 
 import (
+	"gopkg.in/gographics/imagick.v3/imagick"
 	"pipa/backend"
+	"pipa/helper"
 	"strconv"
 	"strings"
 )
 
-func adjustCropTask(plan *backend.CropTask, width, height uint) {
+const (
+	//Resize default param
+	Zoom       = 0.0
+	Force      = false
+	Crop       = false
+	Pad        = false
+	Limit      = true
+	Background = "#FFFFFF"
+	Method     = imagick.FILTER_POINT
+	//Watermark default param
+	XMargin      = 10
+	YMargin      = 10
+	GRAVITY      = imagick.GRAVITY_SOUTH_EAST
+	Transparency = 100
+	Front 		 = helper.PIAP_FRONT_PATh + "WQYZH.ttf"
+	FrontSize	 = 40.0
+)
+
+const (
+	NorthWest = "nw"
+	North     = "north"
+	NorthEast = "ne"
+	West      = "west"
+	Center    = "center"
+	East      = "east"
+	SouthWest = "sw"
+	South     = "south"
+	SouthEast = "se"
+)
+
+//Text type
+const (
+	WQYZhenHei        = "wqy-zenhei"
+	WQYMicroHei       = "wqy-microhei"
+	FangZhengShuoSong = "fangzhengshusong"
+	FangZhengKaiTi    = "fangzhengkaiti"
+	FangZhengHeiTi    = "fangzhengheiti"
+	FangZhengFangSong = "fangzhengfangsong"
+	DroidSansFallBack = "droidsansfallback"
+)
+
+func adjustCropTask(plan *backend.ResizeTask, width, height uint) {
 	//单宽高缩放
 	if plan.Width+plan.Height != 0 && plan.Width*plan.Height == 0 {
 		return
@@ -98,6 +141,27 @@ func checkColor(color string) string {
 	case len(color) == 6:
 		return "#" + color
 	default:
-		return "#FFFFFF"
+		return Background
+	}
+}
+
+func selectTextType(tType string) string {
+	switch tType {
+	case WQYZhenHei:
+		return "WQYZH.ttf"
+	case WQYMicroHei:
+		return "WQYWMH.ttf"
+	case FangZhengShuoSong:
+		return "FZSSJW.TTF"
+	case FangZhengKaiTi:
+		return "FZKTJW.TTF"
+	case FangZhengHeiTi:
+		return "FZHTJW.TTF"
+	case FangZhengFangSong:
+		return "FZFSJW.TTF"
+	case DroidSansFallBack:
+		return "DroidSansFallBack.ttf"
+	default:
+		return "WQYZH.ttf"
 	}
 }

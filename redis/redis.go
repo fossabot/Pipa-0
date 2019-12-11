@@ -54,5 +54,5 @@ func Close() {
 }
 
 func Strings() ([]string, error) {
-	return redis.Strings(redisConn.Do("BLPOP", "taskQueue", 0))
+	return redis.Strings(redisConn.Do("BRPOP", "taskQueue", 0))
 }

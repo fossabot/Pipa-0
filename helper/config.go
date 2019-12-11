@@ -6,9 +6,8 @@ import (
 )
 
 const (
-	YIG_CONF_PATH = "/etc/yig/pipa/pipa.toml"
-	//MIN_BUFFER_SIZE = 512 << 10 // 512k
-	//MAX_BUFEER_SIZE = 8 << 20   // 8M
+	PIPA_CONF_PATH = "/etc/yig/pipa/pipa.toml"
+	PIAP_FRONT_PATh = "/usr/share/fonts/Chinese_fonts/"
 )
 
 type Config struct {
@@ -34,7 +33,7 @@ func SetupConfig() {
 }
 
 func MarshalTOMLConfig() error {
-	data, err := ioutil.ReadFile(YIG_CONF_PATH)
+	data, err := ioutil.ReadFile(PIPA_CONF_PATH)
 	if err != nil {
 		if err != nil {
 			panic("Cannot open yig.toml")
