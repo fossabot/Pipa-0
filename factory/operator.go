@@ -9,24 +9,23 @@ import (
 )
 
 type PipaProcess struct {
-	ImagePrecess   backend.ImageProcess
-	OriginFileName string
-	ResultQ        chan FinishTask
+	ImagePrecess backend.ImageProcess
+	ResultQ      chan FinishTask
 }
 
 func (pipa *PipaProcess) returnError(code int, taskData TaskData) {
 	pipa.ResultQ <- FinishTask{code, taskData.uuid, taskData.url, nil, ""}
 }
 
-func (pipa *PipaProcess) returnUnchange(code int, taskData TaskData) {
-	err := pipa.ImagePrecess.ReadImage(pipa.OriginFileName)
+func (pipa *PipaProcess) returnUnchange(originFileName string, code int, taskData TaskData) {
+	err := pipa.ImagePrecess.ReadImage(originFileName)
 	if err != nil {
 		helper.Logger.Error("open temp file failed")
 	}
 	pipa.ResultQ <- FinishTask{code, taskData.uuid, taskData.uuid, pipa.ImagePrecess.GetImageBlob(), pipa.ImagePrecess.GetImageFormat()}
 }
 
-func (pipa *PipaProcess) processImage(taskData TaskData) error {
+func (pipa *PipaProcess) processImage(originFileName string, taskData TaskData) error {
 
 	switch taskData.taskType {
 	case RESIZE:
@@ -35,7 +34,7 @@ func (pipa *PipaProcess) processImage(taskData TaskData) error {
 			return err
 		}
 
-		err = pipa.ImagePrecess.ResizeImage(pipa.OriginFileName, plan)
+		err = pipa.ImagePrecess.ResizeImage(originFileName, plan)
 		if err != nil {
 			return err
 		}
@@ -50,37 +49,43 @@ func (pipa *PipaProcess) processImage(taskData TaskData) error {
 			return err
 		}
 		if plan.PictureMask.Image != "" {
-			watermarkData := StartTask{taskData.uuid + "watermark", taskData.buckerDomain + plan.PictureMask.Image}
-
-			pType, domain, downloadUrl, convertParams, err := parseUrl(watermarkData)
+			watermarkStartData := StartTask{taskData.uuid + "watermark", taskData.bucketDomain + plan.PictureMask.Image}
+			domain, downloadUrl, convertParams, err := parseUrl(watermarkStartData)
 			if err != nil {
 				return err
 			}
 
-			taskData.buckerDomain = domain
+			watermarkTaskData := TaskData{taskData.uuid, taskData.bucketDomain + plan.PictureMask.Image,
+				"", domain, make(map[string]string), taskData.client}
+
 			var retCode int
 			convertParamsSlice := strings.Split(convertParams, "/")
 
-			plan.PictureMask.Filename, retCode = download(taskData.client, downloadUrl, watermarkData.Uuid, "")
+			plan.PictureMask.Filename, retCode = download(watermarkTaskData.client, downloadUrl, watermarkTaskData.uuid, "")
 			if retCode != 200 {
 				os.Remove(plan.PictureMask.Filename)
 				return errors.New("watermark picture download failed")
 			}
-			if pType == 1 || pType == 2 {
-				os.Remove(plan.PictureMask.Filename)
-				return errors.New("watermark picture param is wrong")
-			}
 
 			for _, task := range convertParamsSlice {
-				watermarkPictureOperation(plan, task)
-
-				err := pipa.ImagePrecess.ImageWatermark(pipa.OriginFileName, plan)
-				if err != nil {
-					continue
+				watermarkTaskData.captures, watermarkTaskData.taskType = watermarkPictureOperation(originFileName, task)
+				if len(watermarkTaskData.captures) == 0 {
+					os.Remove(plan.PictureMask.Filename)
+					return errors.New("watermark picture's param is wrong")
 				}
+				err := pipa.processImage(plan.PictureMask.Filename, watermarkTaskData)
+				if err != nil {
+					os.Remove(plan.PictureMask.Filename)
+					return errors.New("watermark picture process failed")
+				}
+				err = pipa.ImagePrecess.WriteImage(plan.PictureMask.Filename)
+			}
+			err = pipa.ImagePrecess.ImageWatermark(originFileName, plan)
+			if err != nil {
+				return err
 			}
 		} else if plan.TextMask.Text != "" {
-			err := pipa.ImagePrecess.ImageWatermark(pipa.OriginFileName, plan)
+			err := pipa.ImagePrecess.ImageWatermark(originFileName, plan)
 			if err != nil {
 				return err
 			}

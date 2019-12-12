@@ -40,12 +40,32 @@ func NewImageWand() (imageProcess backend.ImageProcess) {
 func (img *ImageWand) ResizePreprocess(captures map[string]string) (*backend.ResizeTask, error) {
 
 	n := backend.ResizeTask{}
+	var err error
+
+	if captures["P"] != "" {
+		if captures["fileName"] == "" {
+			return &backend.ResizeTask{}, errors.New("wrong resize fileName detect")
+		}
+		n.FileName = captures["fileName"]
+		n.Proportion, err = strconv.Atoi(captures["P"])
+		if err != nil {
+			return &backend.ResizeTask{}, errors.New("wrong resize P detect")
+		}
+		if n.Proportion < 1 || n.Proportion > 100 {
+			return &backend.ResizeTask{}, errors.New("wrong resize P detect")
+		}
+	} else {
+		n.FileName = ""
+	}
 
 	if captures["p"] == "" {
 		n.Proportion = 0
 	} else {
-		n.Proportion, _ = strconv.Atoi(captures["p"])
-		if n.Proportion < 1 || n.Proportion > 1000 {
+		n.Proportion, err = strconv.Atoi(captures["p"])
+		if err != nil {
+			return &backend.ResizeTask{}, errors.New("wrong resize P detect")
+		}
+		if n.Proportion < 1 || n.Proportion > 100 {
 			return &backend.ResizeTask{}, errors.New("wrong resize p detect")
 		}
 		return &n, nil
@@ -139,6 +159,31 @@ func (img *ImageWand) ResizeImage(fileName string, plan *backend.ResizeTask) err
 	o := newResize()
 	o.Limit = plan.Limit
 	o.Background = plan.Color
+
+	if plan.FileName != "" {
+		picture := imagick.NewMagickWand()
+		err = picture.ReadImage(plan.FileName)
+		if err != nil {
+			helper.Logger.Error("open origin picture file failed")
+			return err
+		}
+		originWidth := int(picture.GetImageWidth())
+		originHeight := int(picture.GetImageHeight())
+		factor := float64(plan.Proportion) / 100.0
+		widthFactor := float64(originWidth / plan.Width)
+		heightFactor := float64(originHeight / plan.Height)
+		if widthFactor*factor < heightFactor {
+			factor = widthFactor * factor
+		} else {
+			factor = heightFactor * factor
+		}
+		o.Zoom = factor
+		err = img.resize(o)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 
 	//proportion zoom
 	if plan.Proportion != 0 {
@@ -287,7 +332,7 @@ func (img *ImageWand) WatermarkPreprocess(captures map[string]string) (*backend.
 	}
 
 	if captures["type"] == "" {
-		n.TextMask.Type = WQYZhenHei
+		n.TextMask.Type = DefaultTextType
 	} else {
 		textType, err := base64.StdEncoding.DecodeString(captures["type"])
 		if err != nil {
@@ -300,7 +345,7 @@ func (img *ImageWand) WatermarkPreprocess(captures map[string]string) (*backend.
 	n.TextMask.Color = checkColor(captures["color"])
 
 	if captures["size"] == "" {
-		n.TextMask.Size = 40
+		n.TextMask.Size = FrontSize
 	} else {
 		n.TextMask.Size, _ = strconv.Atoi(captures["size"])
 		if n.YMargin < 0 || n.YMargin > 1000 {
@@ -398,61 +443,49 @@ func (img *ImageWand) ImageWatermark(fileName string, plan *backend.WatermarkTas
 		}
 		wmWidth := int(picture.GetImageWidth())
 		wmHeight := int(picture.GetImageHeight())
-		factor := float64(plan.PictureMask.Proportion) / 100.0
-		widthFactor := float64(originWidth / wmWidth)
-		heightFactor := float64(originHeight / wmHeight)
-		if widthFactor*factor < heightFactor {
-			factor = widthFactor * factor
-		} else {
-			factor = heightFactor * factor
-		}
-		err = picture.ResizeImage(uint(float64(wmWidth)*factor), uint(float64(wmHeight)*factor), Method)
-		if err != nil {
-			helper.Logger.Error("MagickWand resize image failed... err:", err)
-			return err
-		}
+
 		w.Picture = picture
 		w.Transparency = plan.Transparency
 		switch plan.Position {
 		case NorthWest:
-			w.XMargin = -plan.XMargin
-			w.YMargin = -plan.YMargin
+			w.XMargin = plan.XMargin
+			w.YMargin = plan.YMargin
 			break
 		case North:
-			w.XMargin = (wmWidth - originWidth) / 2
-			w.YMargin = -plan.YMargin
+			w.XMargin = (originWidth - wmWidth) / 2
+			w.YMargin = plan.YMargin
 			break
 		case NorthEast:
-			w.XMargin = plan.XMargin + wmWidth - originWidth
-			w.YMargin = -plan.YMargin
+			w.XMargin = originWidth - plan.XMargin - wmWidth
+			w.YMargin = plan.YMargin
 			break
 		case West:
-			w.XMargin = -plan.XMargin
-			w.YMargin = plan.Voffset + (wmHeight-originHeight)/2
+			w.XMargin = plan.XMargin
+			w.YMargin = (originHeight-wmHeight)/2 - plan.Voffset
 			break
 		case Center:
-			w.XMargin = (wmWidth - originWidth) / 2
-			w.YMargin = plan.Voffset + (wmHeight-originHeight)/2
+			w.XMargin = (originWidth - wmWidth) / 2
+			w.YMargin = (originHeight-wmHeight)/2 - plan.Voffset
 			break
 		case East:
-			w.XMargin = plan.XMargin + wmWidth - originWidth
-			w.YMargin = plan.Voffset + (wmHeight-originHeight)/2
+			w.XMargin = originWidth - plan.XMargin - wmWidth
+			w.YMargin = (originHeight-wmHeight)/2 - plan.Voffset
 			break
 		case SouthWest:
-			w.XMargin = -plan.XMargin
-			w.YMargin = plan.YMargin + wmHeight - originHeight
+			w.XMargin = plan.XMargin
+			w.YMargin = originHeight - plan.YMargin - wmHeight
 			break
 		case South:
-			w.XMargin = (wmWidth - originWidth) / 2
-			w.YMargin = plan.YMargin + wmHeight - originHeight
+			w.XMargin = (originWidth - wmWidth) / 2
+			w.YMargin = originHeight - plan.YMargin - wmHeight
 			break
 		case SouthEast:
-			w.XMargin = plan.XMargin + wmWidth - originWidth
-			w.YMargin = plan.YMargin + wmHeight - originHeight
+			w.XMargin = originWidth - plan.XMargin - wmWidth
+			w.YMargin = originHeight - plan.YMargin - wmHeight
 			break
 		default:
-			w.XMargin = plan.XMargin + wmWidth - originWidth
-			w.YMargin = plan.YMargin + wmHeight - originHeight
+			w.XMargin = originWidth - plan.XMargin - wmWidth
+			w.YMargin = originHeight - plan.YMargin - wmHeight
 		}
 		err = img.watermark(w)
 		if err != nil {
@@ -538,4 +571,8 @@ func (img *ImageWand) GetImageFormat() string {
 
 func (img *ImageWand) ReadImage(fileName string) error {
 	return img.MagickWand.ReadImage(fileName)
+}
+
+func (img *ImageWand) WriteImage(fileName string) error {
+	return img.MagickWand.WriteImage(fileName)
 }

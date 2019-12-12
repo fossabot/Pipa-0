@@ -1,9 +1,6 @@
 package factory
 
 import (
-	"pipa/backend"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -14,50 +11,65 @@ const (
 	ROTATE    = "rotate"
 )
 
-var resizePattern = regexp.MustCompile("resize(?P<m>,m_[a-z]+)?(?P<w>,w_[0-9]+)?(?P<h>,h_[0-9]+)?(?P<l>,l_[0-9]+)?(?P<s>,s_[0-9]+)?(?P<limit>,limit_[0-1])?(?P<color>,color_[0-9a-fA-F,]+)?(?P<p>,p_[0-9]+)?")
-var watermarkPattern = regexp.MustCompile("watermark(?P<t>,t_[0-9]+)?(?P<g>,g_[a-z]+)?(?P<x>,x_[0-9]+)?(?P<y>,y_[0-9]+)?(?P<voffset>,voffset_[-0-9]+)?(?P<text>,text_[a-zA-Z0-9-_=]+)?(?P<type>,type_[a-zA-Z0-9-_=]+)?(?P<color>,color_[0-9a-fA-F,]+)?(?P<size>,size_[0-9]+)?(?P<shadow>,shadow_[0-9]+)?(?P<rotate>,rotate_[0-9]+)?(?P<fill>,fill_[0-1])?(?P<image>,image_[a-zA-Z0-9-_=]+)?(?P<order>,order_[0-1])?(?P<align>,align_[0-2])?(?P<interval>,interval_[1-9]+)?")
-var resizeNames = resizePattern.SubexpNames()
-var watermarkNames = watermarkPattern.SubexpNames()
+var resizeNames = []string{"m", "w", "h", "l", "s", "limit", "color", "p"}
+var watermarkNames = []string{"t", "g", "x", "y", "voffset", "text", "limit", "color", "size", "shadow", "rotate", "fill", "image", "order", "align", "interval"}
 
-func selectOperation(task, convertParams string) (r []string, names []string, taskType string) {
+func selectOperation(task string) (captures map[string]string, taskType string) {
 	taskKeys := strings.Split(task, ",")
 	switch taskKeys[0] {
 	case RESIZE:
-		r = resizePattern.FindStringSubmatch(convertParams)
-		names = resizeNames
+		captures = splitTaskKeys(resizeNames, taskKeys)
 		taskType = RESIZE
+		break
 	case WATERMARK:
-		r = watermarkPattern.FindStringSubmatch(convertParams)
-		names = watermarkNames
+		captures = splitTaskKeys(watermarkNames, taskKeys)
 		taskType = WATERMARK
+		break
 	default:
-		return nil, nil, ""
+		return nil, ""
 	}
-
-	return r, names, taskType
+	return captures, taskType
 }
 
-func watermarkPictureOperation(plan *backend.WatermarkTask ,task string) {
-
+func watermarkPictureOperation(originFileName, task string) (captures map[string]string, taskType string) {
+	captures = make(map[string]string)
 	taskKeys := strings.Split(task, ",")
 	switch taskKeys[0] {
 	case RESIZE:
-		splited := strings.Split(taskKeys[1], "_")
-		if splited[0] == "P" {
-			num, _ := strconv.Atoi(splited[1])
-			if num > 0 && num < 101 {
-				plan.PictureMask.Proportion = num
-			} else {
-				return
+		for i := 1; i < len(taskKeys); i++ {
+			params := strings.Split(taskKeys[i], "_")
+			for _, name := range resizeNames {
+				if params[0] == name {
+					captures[name] = params[1]
+				} else if params[0] == "P" {
+					captures["P"] = params[1]
+					captures["fileName"] = originFileName
+				}
 			}
-		} else {
-			return
+			if len(captures) < i {
+				return nil, ""
+			}
 		}
 	case CROP:
-
 	case ROTATE:
-
 	default:
-
+		return nil, ""
 	}
+	return captures, taskType
+}
+
+func splitTaskKeys(operationName []string, taskKeys []string) map[string]string {
+	captures := make(map[string]string)
+	for i := 1; i < len(taskKeys); i++ {
+		params := strings.Split(taskKeys[i], "_")
+		for _, name := range operationName {
+			if params[0] == name {
+				captures[name] = params[1]
+			}
+		}
+		if len(captures) < i {
+			return nil
+		}
+	}
+	return captures
 }

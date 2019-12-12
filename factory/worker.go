@@ -21,10 +21,10 @@ type StartTask struct {
 }
 
 type TaskData struct {
-	taskType     string
 	uuid         string
 	url          string
-	buckerDomain string
+	taskType     string
+	bucketDomain string
 	captures     map[string]string
 	client       *http.Client
 }
@@ -81,57 +81,40 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 			continue
 		}
 
-		pType, domain, downloadUrl, convertParams, err := parseUrl(startData)
+		domain, downloadUrl, convertParams, err := parseUrl(startData)
 		if err != nil {
 			continue
 		}
+		taskData.uuid = startData.Uuid
+		taskData.url = startData.Url
+		taskData.bucketDomain = domain
+		taskData.client = client
 
-		taskData.buckerDomain = domain
-		var retCode int
 		convertParamsSlice := strings.Split(convertParams, "/")
 
-		pipa.OriginFileName, retCode = download(client, downloadUrl, startData.Uuid, "")
+		var retCode int
+		originFileName, retCode := download(taskData.client, downloadUrl, taskData.uuid, "")
 		if retCode != 200 {
 			pipa.returnError(retCode, taskData)
-			os.Remove(pipa.OriginFileName)
-			continue
-		}
-		if pType == 1 || pType == 2 {
-			pipa.returnUnchange(200, taskData)
-			os.Remove(pipa.OriginFileName)
+			os.Remove(originFileName)
 			continue
 		}
 
 		for _, task := range convertParamsSlice {
-			var r []string
-			var names []string
-
-			r, names, taskData.taskType = selectOperation(task, convertParams)
-			if taskData.taskType == "" {
-				continue
+			taskData.captures, taskData.taskType = selectOperation(task)
+			if taskData.captures == nil {
+				helper.Logger.Error("some param wrong")
+				break
 			}
 
-			for i, name := range names {
-				if i == 0 {
-					continue
-				}
-				helper.Logger.Info("name: %s, %s", name, r[i])
-				splited := strings.Split(r[i], "_")
-				if len(splited) < 2 {
-					taskData.captures[name] = ""
-				} else {
-					taskData.captures[name] = splited[1]
-				}
-			}
-
-			err := pipa.processImage(taskData)
+			err := pipa.processImage(originFileName, taskData)
 			if err != nil {
-				pipa.returnUnchange(200, taskData)
-				os.Remove(pipa.OriginFileName)
-				helper.Logger.Error("Image process error: ",err)
-				continue
+				pipa.returnUnchange(originFileName, 200, taskData)
+				os.Remove(originFileName)
+				helper.Logger.Error("Image process error: ", err)
+				break
 			}
-			os.Remove(pipa.OriginFileName)
+			os.Remove(originFileName)
 		}
 	}
 }
@@ -140,7 +123,7 @@ func download(client *http.Client, downloadUrl, uuid, localDir string) (string, 
 	helper.Logger.Info("Start to download %s\n", downloadUrl)
 	resp, err := client.Get(downloadUrl)
 	if err != nil {
-		helper.Logger.Println("Download failed!")
+		helper.Logger.Println("Download failed!", err)
 		return "", 404
 	}
 	defer resp.Body.Close()

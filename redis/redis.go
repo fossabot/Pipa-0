@@ -38,21 +38,17 @@ func Initialize() {
 			return err
 		},
 	}
-
-	redisConn = Pool.Get()
 }
 
 func Close() {
-	err := redisConn.Close()
-	if err != nil {
-		helper.Logger.Info("Cannot close redis connection:", err)
-	}
-	err = Pool.Close()
+	err := Pool.Close()
 	if err != nil {
 		helper.Logger.Info("Cannot close redis pool:", err)
 	}
 }
 
 func Strings() ([]string, error) {
+	redisConn = Pool.Get()
+	defer redisConn.Close()
 	return redis.Strings(redisConn.Do("BRPOP", "taskQueue", 0))
 }

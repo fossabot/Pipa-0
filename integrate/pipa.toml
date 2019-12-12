@@ -1,0 +1,14 @@
+log_level = "info"
+log_path = "/var/log/pipa/pipa.log"
+api_listener = "localhost:6060"
+
+#redis Config
+redis_address = "redis:6379"
+redis_password = "hehehehe"
+redis_connect_timeout = 1
+redis_read_timeout = 1
+redis_write_timeout = 1
+redis_pool_max_idle = 300
+redis_pool_idle_timeout = 30
+
+factory_workers_number = 100

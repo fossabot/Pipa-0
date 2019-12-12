@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	PIPA_CONF_PATH = "/etc/yig/pipa/pipa.toml"
+	PIPA_CONF_PATH  = "/root/pipa/integrate/pipa.toml"
 	PIAP_FRONT_PATh = "/usr/share/fonts/Chinese_fonts/"
 )
 
@@ -23,7 +23,7 @@ type Config struct {
 	RedisPoolMaxIdle     int    `toml:"redis_pool_max_idle"`
 	RedisPoolIdleTimeout int    `toml:"redis_pool_idle_timeout"`
 
-	FactoryWorkersNumber int	`toml:"factory_workers_number"`
+	FactoryWorkersNumber int `toml:"factory_workers_number"`
 }
 
 var CONFIG Config
@@ -36,14 +36,28 @@ func MarshalTOMLConfig() error {
 	data, err := ioutil.ReadFile(PIPA_CONF_PATH)
 	if err != nil {
 		if err != nil {
-			panic("Cannot open yig.toml")
+			panic("Cannot open pipa.toml")
 		}
 	}
 	var c Config
 	_, err = toml.Decode(string(data), &c)
 	if err != nil {
-		panic("load yig.toml error: " + err.Error())
+		panic("load pipa.toml error: " + err.Error())
 	}
+
+	CONFIG.LogLevel = c.LogLevel
+	CONFIG.LogPath = c.LogPath
+	CONFIG.BindApiAddress = c.BindApiAddress
+
+	CONFIG.RedisAddress = c.RedisAddress
+	CONFIG.RedisPassword = c.RedisPassword
+	CONFIG.RedisConnectTimeout = c.RedisConnectTimeout
+	CONFIG.RedisReadTimeout = c.RedisReadTimeout
+	CONFIG.RedisWriteTimeout = c.RedisWriteTimeout
+	CONFIG.RedisPoolMaxIdle = c.RedisPoolMaxIdle
+	CONFIG.RedisPoolIdleTimeout = c.RedisPoolIdleTimeout
+
+	CONFIG.FactoryWorkersNumber = c.FactoryWorkersNumber
 
 	return nil
 }

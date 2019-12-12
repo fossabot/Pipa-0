@@ -9,6 +9,7 @@ type ResizeTask struct {
 	Limit      bool
 	Color      string
 	Proportion int
+	FileName   string
 }
 
 type WatermarkTask struct {
@@ -63,5 +64,8 @@ type ImageProcess interface {
 	WatermarkPreprocess(captures map[string]string) (*WatermarkTask, error)
 	//watermark process image
 	ImageWatermark (fileName string, plan *WatermarkTask) error
+	//write image
+	WriteImage(fileName string) error
+
 	Terminate()
 }

@@ -12,9 +12,6 @@ import (
 	"syscall"
 )
 
-type config struct {
-
-}
 
 func DumpStacks() {
 	buf := make([]byte, 1<<16)

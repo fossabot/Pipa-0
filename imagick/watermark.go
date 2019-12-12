@@ -23,7 +23,7 @@ type Text struct {
 }
 
 func newWatermark() Watermark {
-	return Watermark{XMargin, YMargin, imagick.GRAVITY_NORTH_EAST, Transparency, nil, new(Text)}
+	return Watermark{XMargin, YMargin, GRAVITY, Transparency, nil, new(Text)}
 }
 
 func (img *ImageWand) watermark(o Watermark) (err error) {

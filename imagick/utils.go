@@ -3,7 +3,6 @@ package imagick
 import (
 	"gopkg.in/gographics/imagick.v3/imagick"
 	"pipa/backend"
-	"pipa/helper"
 	"strconv"
 	"strings"
 )
@@ -22,8 +21,7 @@ const (
 	YMargin      = 10
 	GRAVITY      = imagick.GRAVITY_SOUTH_EAST
 	Transparency = 100
-	Front 		 = helper.PIAP_FRONT_PATh + "WQYZH.ttf"
-	FrontSize	 = 40.0
+	FrontSize    = 40.0
 )
 
 const (
@@ -40,6 +38,7 @@ const (
 
 //Text type
 const (
+	DefaultTextType   = "wqy-zenhei"
 	WQYZhenHei        = "wqy-zenhei"
 	WQYMicroHei       = "wqy-microhei"
 	FangZhengShuoSong = "fangzhengshusong"
