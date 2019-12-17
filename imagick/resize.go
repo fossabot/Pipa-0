@@ -16,12 +16,13 @@ type Resize struct {
 	Background string
 }
 
-func (img *ImageWand) resize(o Resize) (err error) {
+func (img *ImageWand) resize(o *Resize) (err error) {
 	originWidth := int(img.MagickWand.GetImageWidth())
 	originHeight := int(img.MagickWand.GetImageHeight())
 
 	// image calculations
-	factor := imageCalculations(&o, originWidth, originHeight)
+	factor := imageCalculations(o, originWidth, originHeight)
+	helper.Logger.Info("resize factor: ", factor)
 
 	if o.Limit && !o.Force {
 		if originWidth < o.Width && originHeight < o.Height {
@@ -44,7 +45,7 @@ func (img *ImageWand) resize(o Resize) (err error) {
 			helper.Logger.Error("MagickWand resize image failed... err:", err)
 			return err
 		}
-		err = img.cropImage(o, originWidth, originHeight)
+		err = img.cropImage(o, int(float64(originWidth)*factor), int(float64(originHeight)*factor))
 		if err != nil {
 			return err
 		}
@@ -55,8 +56,15 @@ func (img *ImageWand) resize(o Resize) (err error) {
 			helper.Logger.Error("MagickWand resize image failed... err:", err)
 			return err
 		}
-		err = img.extentImage(o, originWidth, originHeight)
+		err = img.extentImage(o, int(float64(originWidth)*factor), int(float64(originHeight)*factor))
 		if err != nil {
+			return err
+		}
+		break
+	case o.Force == true:
+		err = img.MagickWand.ResizeImage(uint(o.Width), uint(o.Height), Method)
+		if err != nil {
+			helper.Logger.Error("MagickWand resize image failed... err:", err)
 			return err
 		}
 		break
@@ -70,14 +78,14 @@ func (img *ImageWand) resize(o Resize) (err error) {
 	return nil
 }
 
-func newResize() Resize {
-	return Resize{0, 0, Zoom, Force, Crop, Pad, Limit, Background}
+func newResize() *Resize {
+	return &Resize{0, 0, Zoom, Force, Crop, Pad, Limit, Background}
 }
 
 func imageCalculations(o *Resize, inWidth, inHeight int) float64 {
 	factor := 1.0
-	hFactor := float64(o.Width) / float64(inWidth)
-	wFactor := float64(o.Height) / float64(inHeight)
+	wFactor := float64(o.Width) / float64(inWidth)
+	hFactor := float64(o.Height) / float64(inHeight)
 
 	switch {
 	case o.Width > 0 && o.Height > 0:
@@ -100,7 +108,7 @@ func imageCalculations(o *Resize, inWidth, inHeight int) float64 {
 	return factor
 }
 
-func (img *ImageWand) cropImage(o Resize, originWidth, originHeight int) error {
+func (img *ImageWand) cropImage(o *Resize, originWidth, originHeight int) error {
 	offsetWidth := math.Abs(float64(originWidth-o.Width) / 2)
 	offsetHeight := math.Abs(float64(originHeight-o.Height) / 2)
 	err := img.MagickWand.CropImage(uint(o.Width), uint(o.Height), int(offsetWidth), int(offsetHeight))
@@ -111,7 +119,7 @@ func (img *ImageWand) cropImage(o Resize, originWidth, originHeight int) error {
 	return nil
 }
 
-func (img *ImageWand) extentImage(o Resize, originWidth, originHeight int) error {
+func (img *ImageWand) extentImage(o *Resize, originWidth, originHeight int) error {
 	img.PixelWand.SetColor(o.Background)
 	err := img.MagickWand.SetImageBackgroundColor(img.PixelWand)
 	if err != nil {

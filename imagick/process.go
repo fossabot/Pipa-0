@@ -54,6 +54,7 @@ func (img *ImageWand) ResizePreprocess(captures map[string]string) (*backend.Res
 		if n.Proportion < 1 || n.Proportion > 100 {
 			return &backend.ResizeTask{}, errors.New("wrong resize P detect")
 		}
+		return &n, nil
 	} else {
 		n.FileName = ""
 	}
@@ -65,7 +66,7 @@ func (img *ImageWand) ResizePreprocess(captures map[string]string) (*backend.Res
 		if err != nil {
 			return &backend.ResizeTask{}, errors.New("wrong resize P detect")
 		}
-		if n.Proportion < 1 || n.Proportion > 100 {
+		if n.Proportion < 1 || n.Proportion > 1000 {
 			return &backend.ResizeTask{}, errors.New("wrong resize p detect")
 		}
 		return &n, nil
@@ -150,7 +151,7 @@ func (img *ImageWand) ResizePreprocess(captures map[string]string) (*backend.Res
 }
 
 func (img *ImageWand) ResizeImage(fileName string, plan *backend.ResizeTask) error {
-	helper.Logger.Println("start resize image, plan: ", plan)
+	helper.Logger.Info("start resize image, plan: ", plan)
 	err := img.ReadImage(fileName)
 	if err != nil {
 		helper.Logger.Error("open temp file failed")
@@ -169,9 +170,11 @@ func (img *ImageWand) ResizeImage(fileName string, plan *backend.ResizeTask) err
 		}
 		originWidth := int(picture.GetImageWidth())
 		originHeight := int(picture.GetImageHeight())
+		width := int(img.MagickWand.GetImageWidth())
+		height := int(img.MagickWand.GetImageHeight())
 		factor := float64(plan.Proportion) / 100.0
-		widthFactor := float64(originWidth / plan.Width)
-		heightFactor := float64(originHeight / plan.Height)
+		widthFactor := float64(originWidth / width)
+		heightFactor := float64(originHeight / height)
 		if widthFactor*factor < heightFactor {
 			factor = widthFactor * factor
 		} else {
@@ -201,7 +204,9 @@ func (img *ImageWand) ResizeImage(fileName string, plan *backend.ResizeTask) err
 	//长边优先
 	case "lfit":
 		adjustCropTask(plan, img.MagickWand.GetImageWidth(), img.MagickWand.GetImageHeight())
-		o := Resize{Width: plan.Width, Height: plan.Height}
+		o.Width = plan.Width
+		o.Height = plan.Height
+		helper.Logger.Info("trans params ", o)
 		err = img.resize(o)
 		if err != nil {
 			return err
@@ -210,28 +215,39 @@ func (img *ImageWand) ResizeImage(fileName string, plan *backend.ResizeTask) err
 	//短边优先
 	case "mfit":
 		adjustCropTask(plan, img.MagickWand.GetImageWidth(), img.MagickWand.GetImageHeight())
-		o := Resize{Width: plan.Width, Height: plan.Height}
+		o.Width = plan.Width
+		o.Height = plan.Height
+		helper.Logger.Info("trans params ", o)
 		err = img.resize(o)
 		if err != nil {
 			return err
 		}
 		break
 	case "pad":
-		o := Resize{Width: plan.Width, Height: plan.Height, Pad: true}
+		o.Width = plan.Width
+		o.Height = plan.Height
+		o.Pad = true
+		helper.Logger.Info("trans params ", o)
 		err = img.resize(o)
 		if err != nil {
 			return err
 		}
 		break
 	case "fixed":
-		o := Resize{Width: plan.Width, Height: plan.Height, Force: true}
+		o.Width = plan.Width
+		o.Height = plan.Height
+		o.Force = true
+		helper.Logger.Info("trans params ", o)
 		err = img.resize(o)
 		if err != nil {
 			return err
 		}
 		break
 	case "fill":
-		o := Resize{Width: plan.Width, Height: plan.Height, Crop: true}
+		o.Width = plan.Width
+		o.Height = plan.Height
+		o.Crop = true
+		helper.Logger.Info("trans params ", o)
 		err = img.resize(o)
 		if err != nil {
 			return err
@@ -425,7 +441,7 @@ func (img *ImageWand) WatermarkPreprocess(captures map[string]string) (*backend.
 }
 
 func (img *ImageWand) ImageWatermark(fileName string, plan *backend.WatermarkTask) error {
-	helper.Logger.Println("start resize image, plan: ", plan)
+	helper.Logger.Info("start resize image, plan: ", plan)
 	err := img.ReadImage(fileName)
 	if err != nil {
 		helper.Logger.Error("open temp file failed")
@@ -436,7 +452,7 @@ func (img *ImageWand) ImageWatermark(fileName string, plan *backend.WatermarkTas
 	originHeight := int(img.MagickWand.GetImageHeight())
 	if plan.PictureMask.Image != "" {
 		picture := imagick.NewMagickWand()
-		err = picture.ReadImage(plan.PictureMask.Filename)
+		err = picture.ReadImage(plan.PictureMask.FileName)
 		if err != nil {
 			helper.Logger.Error("open watermark picture file failed")
 			return err
@@ -487,6 +503,7 @@ func (img *ImageWand) ImageWatermark(fileName string, plan *backend.WatermarkTas
 			w.XMargin = originWidth - plan.XMargin - wmWidth
 			w.YMargin = originHeight - plan.YMargin - wmHeight
 		}
+		helper.Logger.Info("trans params ", w)
 		err = img.watermark(w)
 		if err != nil {
 			return err
@@ -551,6 +568,7 @@ func (img *ImageWand) ImageWatermark(fileName string, plan *backend.WatermarkTas
 			w.XMargin = plan.XMargin
 			w.YMargin = plan.YMargin
 		}
+		helper.Logger.Info("trans params ", w)
 		err = img.watermark(w)
 		if err != nil {
 			return err

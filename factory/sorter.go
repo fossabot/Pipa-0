@@ -31,7 +31,7 @@ func selectOperation(task string) (captures map[string]string, taskType string) 
 	return captures, taskType
 }
 
-func watermarkPictureOperation(originFileName, task string) (captures map[string]string, taskType string) {
+func watermarkPictureOperation(task string) (captures map[string]string, taskType string) {
 	captures = make(map[string]string)
 	taskKeys := strings.Split(task, ",")
 	switch taskKeys[0] {
@@ -43,13 +43,15 @@ func watermarkPictureOperation(originFileName, task string) (captures map[string
 					captures[name] = params[1]
 				} else if params[0] == "P" {
 					captures["P"] = params[1]
-					captures["fileName"] = originFileName
+					captures["fileName"] = "originFileName"
 				}
 			}
 			if len(captures) < i {
 				return nil, ""
 			}
 		}
+		taskType = RESIZE
+		break
 	case CROP:
 	case ROTATE:
 	default:

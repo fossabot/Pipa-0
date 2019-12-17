@@ -2,10 +2,12 @@ package factory
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"pipa/backend"
 	"pipa/helper"
 	"pipa/imagick"
 	"pipa/redis"
@@ -45,6 +47,7 @@ func StartWork() {
 
 	httpClient := &http.Client{Timeout: time.Second * 5}
 
+	helper.Wg.Add(helper.CONFIG.FactoryWorkersNumber + 1)
 	for i := 0; i < helper.CONFIG.FactoryWorkersNumber; i++ {
 		go slave(taskQ, returnQ, httpClient, i)
 	}
@@ -54,8 +57,9 @@ func StartWork() {
 	for {
 		r, err := redis.Strings()
 		if err != nil {
-			helper.Logger.Info("something bad happend %v", err)
-			return
+			helper.Logger.Info("something bad happened", err)
+			time.Sleep(6 * time.Second)
+			continue
 		}
 		helper.Logger.Println("Now have", r[1])
 		taskQ <- r[1]
@@ -64,6 +68,7 @@ func StartWork() {
 
 func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slave_num int) {
 
+	defer helper.Wg.Done()
 	for {
 		pipa := PipaProcess{
 			ImagePrecess: imagick.Initialize(),
@@ -92,6 +97,22 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 
 		convertParamsSlice := strings.Split(convertParams, "/")
 
+		var tempTasks []*backend.TempTask
+		for _, task := range convertParamsSlice {
+			taskData.captures, taskData.taskType = selectOperation(task)
+			if taskData.captures == nil {
+				helper.Logger.Error("some param wrong")
+				break
+			}
+
+			tempTask, err := pipa.preprocessImage(taskData)
+			if err != nil {
+				helper.Logger.Error("wrong params: ", err)
+				break
+			}
+			tempTasks = append(tempTasks, tempTask)
+		}
+
 		var retCode int
 		originFileName, retCode := download(taskData.client, downloadUrl, taskData.uuid, "")
 		if retCode != 200 {
@@ -100,27 +121,21 @@ func slave(taskQ chan string, resultQ chan FinishTask, client *http.Client, slav
 			continue
 		}
 
-		for _, task := range convertParamsSlice {
-			taskData.captures, taskData.taskType = selectOperation(task)
-			if taskData.captures == nil {
-				helper.Logger.Error("some param wrong")
-				break
-			}
-
-			err := pipa.processImage(originFileName, taskData)
-			if err != nil {
-				pipa.returnUnchange(originFileName, 200, taskData)
-				os.Remove(originFileName)
-				helper.Logger.Error("Image process error: ", err)
-				break
-			}
+		err = pipa.processImage(originFileName, tempTasks)
+		if err != nil {
+			pipa.returnUnchange(originFileName, 200, taskData)
 			os.Remove(originFileName)
+			helper.Logger.Error("Image process error: ", err)
+			break
 		}
+		pipa.ResultQ <- FinishTask{200, startData.Uuid, startData.Url,
+			pipa.ImagePrecess.GetImageBlob(), pipa.ImagePrecess.GetImageFormat()}
+		os.Remove(originFileName)
 	}
 }
 
 func download(client *http.Client, downloadUrl, uuid, localDir string) (string, int) {
-	helper.Logger.Info("Start to download %s\n", downloadUrl)
+	helper.Logger.Println(fmt.Sprintf("Start to download %s\n", downloadUrl))
 	resp, err := client.Get(downloadUrl)
 	if err != nil {
 		helper.Logger.Println("Download failed!", err)
@@ -137,8 +152,8 @@ func download(client *http.Client, downloadUrl, uuid, localDir string) (string, 
 	mimeType := resp.Header.Get("Content-Type")
 
 	if strings.Contains(mimeType, "image") == false {
-		if ok, _ := regexp.MatchString("(jpeg|jpg|png|gif)", downloadUrl); ok == false {
-			helper.Logger.Println("MIME TYPE is %s not an image\n", mimeType)
+		if ok, _ := regexp.MatchString("(jpeg|jpg|png|gif|bmp|webp)", downloadUrl); ok == false {
+			helper.Logger.Println(fmt.Sprintf("MIME TYPE is %s not an image\n", mimeType))
 			return "", http.StatusUnsupportedMediaType //415
 		}
 	}
@@ -152,7 +167,7 @@ func download(client *http.Client, downloadUrl, uuid, localDir string) (string, 
 	/* open temp file */
 	tmpfile, err := ioutil.TempFile(localDir, uuid)
 	if err != nil {
-		helper.Logger.Info("can not create temp file %s", uuid)
+		helper.Logger.Error("can not create temp file", uuid)
 		return "", 404
 	}
 	defer tmpfile.Close()
@@ -162,7 +177,7 @@ func download(client *http.Client, downloadUrl, uuid, localDir string) (string, 
 		return "", 404
 	}
 
-	helper.Logger.Info("download %d bytes from %s OK\n", n, downloadUrl)
+	helper.Logger.Info(fmt.Sprintf("download %d bytes from %s OK\n", n, downloadUrl))
 	return tmpfile.Name(), 200
 }
 
@@ -173,6 +188,7 @@ func combineData(blob []byte, mime string) []byte {
 }
 
 func reportFinish(resultQ chan FinishTask) {
+	defer helper.Wg.Done()
 	redisConn := redis.Pool.Get()
 	defer redisConn.Close()
 	for r := range resultQ {
@@ -187,6 +203,6 @@ func reportFinish(resultQ chan FinishTask) {
 		} else {
 			redisConn.Do("LPUSH", r.uuid, r.code)
 		}
-		helper.Logger.Println("finishing task [%s] for %s code %d\n", r.uuid, r.url, r.code)
+		helper.Logger.Info(fmt.Sprintf("finishing task [%s] for %s code %d\n", r.uuid, r.url, r.code))
 	}
 }

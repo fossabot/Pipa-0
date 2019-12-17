@@ -15,7 +15,7 @@ const (
 	Pad        = false
 	Limit      = true
 	Background = "#FFFFFF"
-	Method     = imagick.FILTER_POINT
+	Method     = imagick.FILTER_LANCZOS
 	//Watermark default param
 	XMargin      = 10
 	YMargin      = 10

@@ -2,6 +2,7 @@ package factory
 
 import (
 	"errors"
+	"fmt"
 	"pipa/helper"
 	"strings"
 )
@@ -10,7 +11,7 @@ func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams str
 	//download content from data stripe all the query string and add "http://"
 	uuid := startData.Uuid
 	url := startData.Url
-	helper.Logger.Info("I got task %s %s\n", uuid, url)
+	helper.Logger.Info(fmt.Sprintf("I got task %s %s\n", uuid, url))
 
 	var pos int
 
@@ -33,7 +34,7 @@ func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams str
 		}
 	}
 
-	buckerDomain = strings.Split(url, "/")[0]
+	buckerDomain = "http://" + strings.Split(url, "/")[2] + "/"
 	downloadUrl = url[startPos:pos]
 	convertParams = url[pos+len("?x-oss-process=image/"):]
 
