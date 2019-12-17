@@ -1,5 +1,11 @@
 package backend
 
+type TempTask struct {
+	TaskType      string
+	ResizeTask    *ResizeTask
+	WatermarkTask *WatermarkTask
+}
+
 type ResizeTask struct {
 	Mode       string
 	Width      int
@@ -26,11 +32,13 @@ type WatermarkTask struct {
 }
 
 type WatermarkPicture struct {
-	Image      string
-	Filename   string
-	Proportion int
-	Rotate     Rotate
-	Crop       Crop
+	Image                 string
+	OriginFileName		  string
+	FileName              string
+	WatermarkPictureTasks []*TempTask
+	Proportion            int
+	Rotate                Rotate
+	Crop                  Crop
 }
 
 type WatermarkText struct {
@@ -63,7 +71,7 @@ type ImageProcess interface {
 	//watermark preprocess image
 	WatermarkPreprocess(captures map[string]string) (*WatermarkTask, error)
 	//watermark process image
-	ImageWatermark (fileName string, plan *WatermarkTask) error
+	ImageWatermark(fileName string, plan *WatermarkTask) error
 	//write image
 	WriteImage(fileName string) error
 

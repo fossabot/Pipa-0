@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net/http"
 	"os"
 	"os/signal"
 	"pipa/factory"
@@ -32,11 +31,6 @@ func main() {
 	redis.Initialize()
 	defer redis.Close()
 
-	helper.Wg.Add(1)
-	go func() {
-		helper.Logger.Info(http.ListenAndServe(helper.CONFIG.BindApiAddress, nil))
-	}()
-
 	factory.StartWork()
 
 	// ignore signal handlers set by Iris
@@ -52,9 +46,10 @@ func main() {
 		case syscall.SIGUSR1:
 			go DumpStacks()
 		default:
-			// stop YIG server, order matters
+			// stop pipa server, order matters
 			helper.Logger.Info("pipa Server stopped")
 			helper.Wg.Wait()
+			helper.Logger.Info("done")
 			return
 		}
 	}

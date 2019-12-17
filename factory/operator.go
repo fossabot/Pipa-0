@@ -25,79 +25,122 @@ func (pipa *PipaProcess) returnUnchange(originFileName string, code int, taskDat
 	pipa.ResultQ <- FinishTask{code, taskData.uuid, taskData.uuid, pipa.ImagePrecess.GetImageBlob(), pipa.ImagePrecess.GetImageFormat()}
 }
 
-func (pipa *PipaProcess) processImage(originFileName string, taskData TaskData) error {
+func (pipa *PipaProcess) preprocessImage(taskData TaskData) (tempTask *backend.TempTask, err error) {
 
+	tempTask = &backend.TempTask{}
 	switch taskData.taskType {
 	case RESIZE:
-		plan, err := pipa.ImagePrecess.ResizePreprocess(taskData.captures)
+		tempTask.TaskType = RESIZE
+		tempTask.ResizeTask, err = pipa.ImagePrecess.ResizePreprocess(taskData.captures)
 		if err != nil {
-			return err
+			return tempTask, err
 		}
-
-		err = pipa.ImagePrecess.ResizeImage(originFileName, plan)
-		if err != nil {
-			return err
-		}
-
-		pipa.ResultQ <- FinishTask{200, taskData.uuid, taskData.url,
-			pipa.ImagePrecess.GetImageBlob(), pipa.ImagePrecess.GetImageFormat()}
-		return nil
-
+		return tempTask, nil
 	case WATERMARK:
-		plan, err := pipa.ImagePrecess.WatermarkPreprocess(taskData.captures)
+		tempTask.TaskType = WATERMARK
+		tempTask.WatermarkTask, err = pipa.ImagePrecess.WatermarkPreprocess(taskData.captures)
 		if err != nil {
-			return err
+			return tempTask, err
 		}
-		if plan.PictureMask.Image != "" {
-			watermarkStartData := StartTask{taskData.uuid + "watermark", taskData.bucketDomain + plan.PictureMask.Image}
+
+		if tempTask.WatermarkTask.PictureMask.Image != "" {
+			watermarkStartData := StartTask{taskData.uuid + "watermark", taskData.bucketDomain + tempTask.WatermarkTask.PictureMask.Image}
 			domain, downloadUrl, convertParams, err := parseUrl(watermarkStartData)
 			if err != nil {
-				return err
+				return tempTask, err
 			}
 
-			watermarkTaskData := TaskData{taskData.uuid, taskData.bucketDomain + plan.PictureMask.Image,
+			watermarkTaskData := TaskData{taskData.uuid, taskData.bucketDomain + tempTask.WatermarkTask.PictureMask.Image,
 				"", domain, make(map[string]string), taskData.client}
 
-			var retCode int
 			convertParamsSlice := strings.Split(convertParams, "/")
 
-			plan.PictureMask.Filename, retCode = download(watermarkTaskData.client, downloadUrl, watermarkTaskData.uuid, "")
-			if retCode != 200 {
-				os.Remove(plan.PictureMask.Filename)
-				return errors.New("watermark picture download failed")
+			var watermarkResizeTasks []*backend.TempTask
+			for _, task := range convertParamsSlice {
+				taskData.captures, taskData.taskType = watermarkPictureOperation(task)
+				if taskData.captures == nil {
+					helper.Logger.Error("some param wrong")
+					break
+				}
+
+				tempTask, err := pipa.preprocessImage(taskData)
+				if err != nil {
+					helper.Logger.Error("wrong params: ", err)
+					break
+				}
+				watermarkResizeTasks = append(watermarkResizeTasks, tempTask)
 			}
 
-			for _, task := range convertParamsSlice {
-				watermarkTaskData.captures, watermarkTaskData.taskType = watermarkPictureOperation(originFileName, task)
-				if len(watermarkTaskData.captures) == 0 {
-					os.Remove(plan.PictureMask.Filename)
-					return errors.New("watermark picture's param is wrong")
-				}
-				err := pipa.processImage(plan.PictureMask.Filename, watermarkTaskData)
-				if err != nil {
-					os.Remove(plan.PictureMask.Filename)
-					return errors.New("watermark picture process failed")
-				}
-				err = pipa.ImagePrecess.WriteImage(plan.PictureMask.Filename)
+			var retCode int
+			tempTask.WatermarkTask.PictureMask.FileName, retCode = download(watermarkTaskData.client, downloadUrl, watermarkTaskData.uuid, "")
+			if retCode != 200 {
+				os.Remove(tempTask.WatermarkTask.PictureMask.FileName)
+				return tempTask, errors.New("watermark picture download failed")
 			}
-			err = pipa.ImagePrecess.ImageWatermark(originFileName, plan)
-			if err != nil {
-				return err
-			}
-		} else if plan.TextMask.Text != "" {
-			err := pipa.ImagePrecess.ImageWatermark(originFileName, plan)
-			if err != nil {
-				return err
-			}
+			tempTask.WatermarkTask.PictureMask.WatermarkPictureTasks = watermarkResizeTasks
+
+		} else if tempTask.WatermarkTask.TextMask.Text != "" {
+			return tempTask, err
 		} else {
-			return errors.New("watermark add failed")
+			return tempTask, errors.New("watermark wrong params")
 		}
-		pipa.ResultQ <- FinishTask{200, taskData.uuid, taskData.url,
-			pipa.ImagePrecess.GetImageBlob(), pipa.ImagePrecess.GetImageFormat()}
-		return nil
+		return tempTask, nil
 	default:
-		return errors.New("image is not processed ")
+		return tempTask, errors.New("image is not processed ")
 	}
+}
+
+func (pipa *PipaProcess) processImage(originFileName string, tempTasks []*backend.TempTask) error {
+
+	for _, tempTask := range tempTasks {
+		switch tempTask.TaskType {
+		case RESIZE:
+			err := pipa.ImagePrecess.ResizeImage(originFileName, tempTask.ResizeTask)
+			if err != nil {
+				return err
+			}
+			err = pipa.ImagePrecess.WriteImage(originFileName)
+			if err != nil {
+				return err
+			}
+			break
+		case WATERMARK:
+			if tempTask.WatermarkTask.PictureMask.Image != "" {
+				for _, watermarkPictureTask := range tempTask.WatermarkTask.PictureMask.WatermarkPictureTasks {
+					watermarkPictureTask.ResizeTask.FileName = originFileName
+					switch watermarkPictureTask.TaskType {
+					case RESIZE:
+						err := pipa.ImagePrecess.ResizeImage(tempTask.WatermarkTask.PictureMask.FileName, watermarkPictureTask.ResizeTask)
+						if err != nil {
+							return err
+						}
+						err = pipa.ImagePrecess.WriteImage(tempTask.WatermarkTask.PictureMask.FileName)
+						if err != nil {
+							return err
+						}
+						break
+					case CROP:
+					case ROTATE:
+					default:
+						helper.Logger.Info("watermark picture is not processed")
+					}
+				}
+			}
+			err := pipa.ImagePrecess.ImageWatermark(originFileName, tempTask.WatermarkTask)
+			if err != nil {
+				return err
+			}
+			err = pipa.ImagePrecess.WriteImage(originFileName)
+			if err != nil {
+				return err
+			}
+			break
+		default:
+			helper.Logger.Info("image is not processed")
+			//return errors.New("image is not processed ")
+		}
+	}
+	return nil
 }
 
 func (pipa *PipaProcess) processDone() {
