@@ -9,20 +9,21 @@ import (
 
 func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams string, err error) {
 	//download content from data stripe all the query string and add "http://"
+	urlFragments := strings.Split(startData.Url, "&")
 	uuid := startData.Uuid
-	url := startData.Url
+	url := urlFragments[0]
 	helper.Logger.Info(fmt.Sprintf("I got task %s %s\n", uuid, url))
 
 	var pos int
 
 	if pos0 := strings.Index(url, "?x-oss-process=image/"); pos0 != -1 {
 		pos = pos0
-	}  else if pos1 := strings.Index(url, "?"); pos1 != -1 {
+	} else if pos1 := strings.Index(url, "?"); pos1 != -1 {
 		pos = pos1
 		return "", "", "", errors.New("can not found convert parameters")
 	} else {
 		helper.Logger.Info("can not found convert parameters")
-		return  "", "", "", errors.New("can not found convert parameters")
+		return "", "", "", errors.New("can not found convert parameters")
 	}
 
 	//if remove any slash at the start
@@ -36,6 +37,11 @@ func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams str
 
 	buckerDomain = "http://" + strings.Split(url, "/")[2] + "/"
 	downloadUrl = url[startPos:pos]
+	if len(urlFragments) > 1 {
+		for i := 1; i < len(urlFragments); i++ {
+			downloadUrl += urlFragments[i]
+		}
+	}
 	convertParams = url[pos+len("?x-oss-process=image/"):]
 
 	return buckerDomain, downloadUrl, convertParams, nil

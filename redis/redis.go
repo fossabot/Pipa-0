@@ -50,5 +50,5 @@ func Close() {
 func Strings() ([]string, error) {
 	redisConn = Pool.Get()
 	defer redisConn.Close()
-	return redis.Strings(redisConn.Do("BRPOP", "taskQueue", 0))
+	return redis.Strings(redisConn.Do("BRPOP", "taskQueue", 10))
 }
