@@ -152,7 +152,7 @@ func download(client *http.Client, downloadUrl, uuid, localDir string) (string, 
 	mimeType := resp.Header.Get("Content-Type")
 
 	if strings.Contains(mimeType, "image") == false {
-		if ok, _ := regexp.MatchString("(jpeg|jpg|png|gif|bmp|webp)", downloadUrl); ok == false {
+		if ok, _ := regexp.MatchString("(jpeg|jpg|png|gif|bmp|webp|tiff)", downloadUrl); ok == false {
 			helper.Logger.Println(fmt.Sprintf("MIME TYPE is %s not an image\n", mimeType))
 			return "", http.StatusUnsupportedMediaType //415
 		}
