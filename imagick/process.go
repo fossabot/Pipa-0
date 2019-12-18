@@ -168,17 +168,19 @@ func (img *ImageWand) ResizeImage(fileName string, plan *backend.ResizeTask) err
 			helper.Logger.Error("open origin picture file failed")
 			return err
 		}
-		originWidth := int(picture.GetImageWidth())
-		originHeight := int(picture.GetImageHeight())
-		width := int(img.MagickWand.GetImageWidth())
-		height := int(img.MagickWand.GetImageHeight())
+		originWidth := float64(picture.GetImageWidth())
+		originHeight := float64(picture.GetImageHeight())
+		width := float64(img.MagickWand.GetImageWidth())
+		height := float64(img.MagickWand.GetImageHeight())
 		factor := float64(plan.Proportion) / 100.0
-		widthFactor := float64(originWidth / width)
-		heightFactor := float64(originHeight / height)
-		if widthFactor*factor < heightFactor {
-			factor = widthFactor * factor
-		} else {
-			factor = heightFactor * factor
+		tempWidth := originWidth * factor
+		tempHeight := originHeight * factor
+		widthFactor := tempWidth / width
+		heightFactor := tempHeight / height
+		if widthFactor > heightFactor {
+			factor = heightFactor
+		}else {
+			factor = widthFactor
 		}
 		o.Zoom = factor
 		err = img.resize(o)

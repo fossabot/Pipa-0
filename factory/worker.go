@@ -58,6 +58,7 @@ func StartWork() {
 		r, err := redis.Strings()
 		if err != nil {
 			helper.Logger.Info("something bad happened", err)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 		helper.Logger.Println("Now have", r[1])
