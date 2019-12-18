@@ -111,6 +111,7 @@ func imageCalculations(o *Resize, inWidth, inHeight int) float64 {
 func (img *ImageWand) cropImage(o *Resize, originWidth, originHeight int) error {
 	offsetWidth := math.Abs(float64(originWidth-o.Width) / 2)
 	offsetHeight := math.Abs(float64(originHeight-o.Height) / 2)
+	//CropImage(width,height,x,y)
 	err := img.MagickWand.CropImage(uint(o.Width), uint(o.Height), int(offsetWidth), int(offsetHeight))
 	if err != nil {
 		helper.Logger.Error("MagickWand resize crop image... err:", err)
@@ -128,6 +129,7 @@ func (img *ImageWand) extentImage(o *Resize, originWidth, originHeight int) erro
 	}
 	offsetWidth := math.Abs(float64(originWidth-o.Width) / 2)
 	offsetHeight := math.Abs(float64(originHeight-o.Height) / 2)
+	//ExtentImage(width,height,x,y)
 	err = img.MagickWand.ExtentImage(uint(o.Width), uint(o.Height), -int(offsetWidth), -int(offsetHeight))
 	if err != nil {
 		helper.Logger.Error("MagickWand extent image failed... err:", err)

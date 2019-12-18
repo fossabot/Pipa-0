@@ -9,8 +9,9 @@ import (
 
 func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams string, err error) {
 	//download content from data stripe all the query string and add "http://"
+	urlFragments := strings.Split(startData.Url, "&")
 	uuid := startData.Uuid
-	url := startData.Url
+	url := urlFragments[0]
 	helper.Logger.Info(fmt.Sprintf("I got task %s %s\n", uuid, url))
 
 	var pos int
@@ -36,6 +37,9 @@ func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams str
 
 	buckerDomain = "http://" + strings.Split(url, "/")[2] + "/"
 	downloadUrl = url[startPos:pos]
+	for _, urlFragment := range urlFragments {
+		downloadUrl += urlFragment
+	}
 	convertParams = url[pos+len("?x-oss-process=image/"):]
 
 	return buckerDomain, downloadUrl, convertParams, nil
