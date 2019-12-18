@@ -18,12 +18,12 @@ func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams str
 
 	if pos0 := strings.Index(url, "?x-oss-process=image/"); pos0 != -1 {
 		pos = pos0
-	}  else if pos1 := strings.Index(url, "?"); pos1 != -1 {
+	} else if pos1 := strings.Index(url, "?"); pos1 != -1 {
 		pos = pos1
 		return "", "", "", errors.New("can not found convert parameters")
 	} else {
 		helper.Logger.Info("can not found convert parameters")
-		return  "", "", "", errors.New("can not found convert parameters")
+		return "", "", "", errors.New("can not found convert parameters")
 	}
 
 	//if remove any slash at the start
@@ -37,8 +37,10 @@ func parseUrl(startData StartTask) (buckerDomain, downloadUrl, convertParams str
 
 	buckerDomain = "http://" + strings.Split(url, "/")[2] + "/"
 	downloadUrl = url[startPos:pos]
-	for _, urlFragment := range urlFragments {
-		downloadUrl += urlFragment
+	if len(urlFragments) > 1 {
+		for i := 1; i < len(urlFragments); i++ {
+			downloadUrl += urlFragments[i]
+		}
 	}
 	convertParams = url[pos+len("?x-oss-process=image/"):]
 
