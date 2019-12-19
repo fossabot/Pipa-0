@@ -194,9 +194,9 @@ func reportFinish(resultQ chan FinishTask) {
 	for r := range resultQ {
 		//put data back to redis
 		if r.code == 200 {
-			combined := combineData(r.blob, r.mime)
+			//combined := combineData(r.blob, r.mime)
 			redisConn.Do("MULTI")
-			redisConn.Do("SET", r.url, combined)
+			redisConn.Do("SET", r.url, r.blob)
 			redisConn.Do("LPUSH", r.uuid, r.code)
 			redisConn.Do("EXEC")
 			r.blob = nil
